@@ -1,0 +1,242 @@
+\documentclass[onecolumn,draftclsnofoot, 10pt, compsoc]{IEEEtran}
+
+\usepackage{graphicx}
+\usepackage[section]{placeins}
+\usepackage{caption}
+
+\usepackage{amssymb}                                         
+\usepackage{amsmath}                                         
+\usepackage{amsthm}                                
+
+\usepackage{alltt}                                           
+\usepackage{float}
+\usepackage{color}
+\usepackage{url}
+
+\usepackage{balance}
+\usepackage[TABBOTCAP, tight]{subfigure}
+\usepackage{enumitem}
+\usepackage{pstricks, pst-node}
+\usepackage{url}
+\usepackage{setspace}
+
+\usepackage{etoolbox}
+\AtBeginEnvironment{quote}{\singlespacing\vspace{-\topsep}\small}
+
+%\input{pygments.tex}
+
+\usepackage{geometry}
+\geometry{left=0.75in,right=0.75in,top=0.75in,bottom=0.75in}
+\parindent = 0.0 in
+\parskip = 0.1 in
+
+\usepackage{listings}
+\lstset{language=C,caption={Descriptive Caption Text},label=DescriptiveLabel}
+\lstdefinestyle{customc}{
+	belowcaptionskip=1\baselineskip,
+	breaklines=true,
+	frame=L,
+	xleftmargin=\parindent,
+	language=C,
+	showstringspaces=false,
+	basicstyle=\footnotesize\ttfamily,
+	keywordstyle=\bfseries\color{green!40!black},
+	commentstyle=\itshape\color{purple!40!black},
+	identifierstyle=\color{blue},
+	stringstyle=\color{orange},
+}
+
+\lstdefinestyle{customasm}{
+	belowcaptionskip=1\baselineskip,
+	frame=L,
+	xleftmargin=\parindent,
+	language=[x86masm]Assembler,
+	basicstyle=\footnotesize\ttfamily,
+	commentstyle=\itshape\color{purple!40!black},
+}
+
+
+\def \ParSpace{\vspace{.75em}}
+\def \GroupNumber{		17}
+\def \Jeremy{			Jeremy Fischer}
+\def \Class{		Operating Systems ii}
+\def \School{	Oregon State University}
+\def \Professor{		 Kevin McGrath}
+
+\newcommand{\cred}[1]{{\color{red}#1}}
+\newcommand{\cblue}[1]{{\color{blue}#1}}
+
+\newcommand{\NameSigPair}[1]{
+		\par
+		\makebox[2.75in][r]{#1} \hfil 	\makebox[3.25in]{\makebox[2.25in]{\hrulefill} \hfill			
+		\makebox[.75in]{\hrulefill}}
+		\par\vspace{-12pt} \textit{
+			\tiny\noindent
+			\makebox[2.75in]{} \hfil		
+			\makebox[3.25in]{
+				\makebox[2.25in][r]{Signature} \hfill	\makebox[.75in][r]{Date}
+			}
+		}
+}
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+\begin{titlepage}
+    \pagenumbering{gobble}
+    \begin{singlespace}
+    \includegraphics[height=4cm]{coe.eps}
+        \hfill  
+        \par\vspace{.2in}
+        \centering
+        \scshape{
+            \vspace{.5in}
+            \textbf{\Huge\Class}\par
+            \large{
+            	\today \\Fall Term
+        	}
+            \vfill
+            {\large Prepared for}\par
+            \huge \School\par
+            \vspace{5pt}
+            {\Large{\Professor}\par}
+            {\large Prepared by }\par
+           % Group\GroupNumber\par
+            \vspace{5pt}
+            {\Large
+                {\Jeremy}\par
+            }
+            \vspace{20pt}
+        }
+        \begin{abstract}
+        	This document explores file systems in the Linux, FreeBSD, and Windows operating systems. 
+        	The document concludes with a comparison of the three's implementation.
+        \end{abstract}     
+    \end{singlespace}
+\end{titlepage}
+\newpage
+\pagenumbering{arabic}
+\tableofcontents
+% 7. uncomment this (if applicable). Consider adding a page break.
+%\listoffigures
+%\listoftables
+\clearpage
+
+
+
+
+
+
+
+
+
+\section{Linux Implementation}
+	In Linux, regular files are simply a stream of bytes.
+	When an application requests to read a regular file, the stream of bytes are presented to the application along with an End Of File (EOF) condition.
+	A regular file is referenced by the system by an inode.
+	
+	When a file is created, a unique number is associated to it.
+	This is called the inode number.
+	An inode holds information about the file such as \cite{llinuxInodeContents}:
+	\begin{itemize}
+		\item the file's permission mode
+		\item the number of links in place for the file
+		\item the file owners UID number
+		\item the group GID number
+		\item the file size represented in bytes
+		\item the address of the datablocks
+		\item the time the file was last modified
+		\item the time any part of the inode was changed
+	\end{itemize}
+	
+	When a file is not being used, its inode which resides on disk is called a disk inode.
+	When the file is being used, the kernel places the inode onto a generic inode table and the inode now becomes a generic inode \cite{llinuxFiles}.
+	
+	In Linux, a directory is simply a file whose contents provide a mapping mechanism between the names of files in the directory and the file's actual datablocks.
+	More specifically, a directory only holds the inode numbers and filenames of the files within it \cite{llinuxFiles}.
+	
+	\subsection{Ext4}
+		For most Linux distributions the Ext file system is the default file system.
+		Ext was created in 1992 and has since been revised three times leading to the Ext4, which was created in 2008.
+		The Ext4 file system was designed to be backwards compatible. This means one can mount an Ext4 file system as Ext3.
+		Ext4 includes newer features that reduce file fragmentation, allows for larger volumes and files, and uses delayed allocation to improve flash memory life.
+		Ext4 is a journaling file system.
+		This means before the operating makes a write to disk, metadata is written in a journal.
+		This way if the power goes out in the middle of a disk write the operating system knows to finish the write from checking the journal.
+		Without a journal the operating system isn't aware that it didn't finish a write, creating a possibility for corrupt data on disk. 
+		When formatting an external drive that will be shared with other operating systems, one should not use Ext4 because Windows, macOS, and other devices can’t read Ext4 file systems \cite{llinuxEXT4}.
+	
+	\subsection{BtrFS}
+		BtrFS, stands for “B-Tree File System.”
+		BtrFS allows for drive pooling, on the fly snapshots, transparent compression, and online defragmentation \cite{llinuxEXT4}.
+	
+\section{FreeBSD Implementation}
+	\subsection{UFS}
+		UFS stands for "Unix File System."
+		UFS is split into two layers: an upper layer (called the UFS) and a lower layer (called the FFS).
+		The upper layer contains the file system's directories in an inode structure and metadata such as permissions and ownership.
+		The lower layer provides data containers implemented as inodes \cite{freebsdUFS}.
+		
+		In UFS2, the upper and lower layer are extended to add 64-bit block pointers.
+		This allows for volumes to grow up to 8 zettabytes, variable-sized blocks, extended flag fields, and additional 'birthtime' stamps. 
+		Since FreeBSD 7.0, UFS also supports filesystem journaling \cite{freebsdUFS}.
+
+	\subsection{ZFS}
+		 ZFS supports a lot of advanced features including drive pooling, snapshots, and dynamic disk striping.
+		 Each file in ZFS has a checksum, so the file system can tell if a file is corrupted or not \cite{llinuxEXT4}.
+		 
+		 ZFS is more than just a file system. 
+		 ZFS combines the volume manager and the file system, which are traditionally kept separate.
+		 The file system is now aware of the underlying structure of the disks. 
+		 Traditional file systems could only be created on a single disk at a time. 
+		 If a user wants to use two disks, then they have to mount two separate file systems. 
+		 ZFS's combination of the volume manager and the file system solves this.
+		 This enhancement also allows multiple file systems to share a pool of available storage. 
+		 Due to ZFS's awareness of the physical layout, when an additional disk is added to the storage pool, each file system accessing that pool automatically grows \cite{freebsdZFS}.  
+
+		
+\section{Windows Implementation}
+	\subsection{FAT}
+		The FAT file system is characterized by the file allocation table (FAT).
+		Two copies of the file allocation table are kept on the system with one acting as a backup in case one becomes corrupted. 
+		A disk utilizing the FAT file system is organized in clusters.
+		The size of each cluster is determined by the size of the overall volume. 
+		When a new file is created it is given the first open location on the drive, and an entry is added in to the FAT table.
+		This entry in the FAT table either indicates that this is the file's last cluster or it points to the file's next cluster.
+		A big disadvantage of the FAT file system is updating the FAT table is time consuming, and doing so is essential \cite{windowsFAT}.
+	
+	\subsection{NTFS}
+		NTFS organizes files into sorted directories.
+		Unlike the FAT file system, NTFS is independent of the underlying hardware of the system, such as 512 byte sectors. 
+		NTFS is also independent of any special locations on the disk, such as FAT tables.
+		According to Microsoft \cite{windowsFAT}, the goals of NTFS are to provide:
+		\begin{itemize}
+			\item{
+				reliability, which is especially desirable for high end systems and file servers}
+			\item{
+				a platform for added functionality}
+			\item{
+				support POSIX requirements}
+			\item{
+				removal of the limitations of the FAT and HPFS file systems}
+		\end{itemize}
+
+\section{Compare}
+	Linux and FreeBSD are extremely similar in their underlying structure of directories and files.
+	Because of this, most of the file systems supported by Linux are also supported by FreeBSD.
+	Windows structures its file systems in a different manner.
+	However, all three operating systems support the FAT file system.
+	
+	
+\bibliographystyle{IEEEtran}
+\bibliography{references.bib}
+
+\end{document}

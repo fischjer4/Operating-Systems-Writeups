@@ -1,0 +1,368 @@
+\documentclass[onecolumn,draftclsnofoot, 10pt, compsoc]{IEEEtran}
+
+\usepackage{graphicx}
+\usepackage[section]{placeins}
+\usepackage{caption}
+
+\usepackage{amssymb}                                         
+\usepackage{amsmath}                                         
+\usepackage{amsthm}                                
+
+\usepackage{alltt}                                           
+\usepackage{float}
+\usepackage{color}
+\usepackage{url}
+
+\usepackage{balance}
+\usepackage[TABBOTCAP, tight]{subfigure}
+\usepackage{enumitem}
+\usepackage{pstricks, pst-node}
+\usepackage{url}
+\usepackage{setspace}
+
+\usepackage{etoolbox}
+\AtBeginEnvironment{quote}{\singlespacing\vspace{-\topsep}\small}
+
+%\input{pygments.tex}
+
+\usepackage{geometry}
+\geometry{left=0.75in,right=0.75in,top=0.75in,bottom=0.75in}
+\parindent = 0.0 in
+\parskip = 0.1 in
+
+\usepackage{listings}
+\lstset{language=C,caption={Descriptive Caption Text},label=DescriptiveLabel}
+\lstdefinestyle{customc}{
+	belowcaptionskip=1\baselineskip,
+	breaklines=true,
+	frame=L,
+	xleftmargin=\parindent,
+	language=C,
+	showstringspaces=false,
+	basicstyle=\footnotesize\ttfamily,
+	keywordstyle=\bfseries\color{green!40!black},
+	commentstyle=\itshape\color{purple!40!black},
+	identifierstyle=\color{blue},
+	stringstyle=\color{orange},
+}
+
+\lstdefinestyle{customasm}{
+	belowcaptionskip=1\baselineskip,
+	frame=L,
+	xleftmargin=\parindent,
+	language=[x86masm]Assembler,
+	basicstyle=\footnotesize\ttfamily,
+	commentstyle=\itshape\color{purple!40!black},
+}
+
+
+\def \ParSpace{\vspace{.75em}}
+\def \GroupNumber{		17}
+\def \Jeremy{			Jeremy Fischer}
+\def \Class{		Operating Systems ii}
+\def \School{	Oregon State University}
+\def \Professor{		 Kevin McGrath}
+
+\newcommand{\cred}[1]{{\color{red}#1}}
+\newcommand{\cblue}[1]{{\color{blue}#1}}
+
+\newcommand{\NameSigPair}[1]{
+		\par
+		\makebox[2.75in][r]{#1} \hfil 	\makebox[3.25in]{\makebox[2.25in]{\hrulefill} \hfill			
+		\makebox[.75in]{\hrulefill}}
+		\par\vspace{-12pt} \textit{
+			\tiny\noindent
+			\makebox[2.75in]{} \hfil		
+			\makebox[3.25in]{
+				\makebox[2.25in][r]{Signature} \hfill	\makebox[.75in][r]{Date}
+			}
+		}
+}
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+\begin{titlepage}
+    \pagenumbering{gobble}
+    \begin{singlespace}
+    \includegraphics[height=4cm]{coe.eps}
+        \hfill  
+        \par\vspace{.2in}
+        \centering
+        \scshape{
+            \vspace{.5in}
+            \textbf{\Huge\Class}\par
+            \large{
+            	\today \\Fall Term
+        	}
+            \vfill
+            {\large Prepared for}\par
+            \huge \School\par
+            \vspace{5pt}
+            {\Large{\Professor}\par}
+            {\large Prepared by }\par
+           % Group\GroupNumber\par
+            \vspace{5pt}
+            {\Large
+                {\Jeremy}\par
+            }
+            \vspace{20pt}
+        }
+        \begin{abstract}
+        	This document explores I/O devices, development resources, and I/O scheduling in the Linux, FreeBSD, and Windows operating systems. 
+        	The document concludes with a comparison of the three's implementation.
+        \end{abstract}     
+    \end{singlespace}
+\end{titlepage}
+\newpage
+\pagenumbering{arabic}
+\tableofcontents
+% 7. uncomment this (if applicable). Consider adding a page break.
+%\listoffigures
+%\listoftables
+\clearpage
+
+
+
+
+
+
+
+
+
+\section{Linux Implementation}
+
+	\subsection{Devices}
+	A character device transfers data in the form of a single character to and from a user application. 
+	This can be done via a pipe or serial ports \cite{deviceLinuxMolly}. 
+	When a character device is created it must first announce its existence by making a call to the function called \textit{register\_chrdev()}. 
+	This call stores the name of the new character device along with a pointer to a \textit{file\_operations} struct in the entry of the \textit{chrdevs} array indexed by the integer \textit{major}, the device number. 
+	When the device is opened the file system recognizes that the file is a special device and invokes the \textit{init\_special\_inode()} function shown below.
+	
+	\lstinputlisting[caption=\textit{init\_special\_inode()} is responsible for returning the \textit{char\_device} struct, style=customc]{init-special-inode-linux.c }
+	
+	In the function above, the \textit{cdget()} function accesses a hash table to see if a \textit{char\_device} struct for this \textit{major\_number} is already instantiated. 
+	If it isn't, then it creates one. \textit{cdget()} returns the struct and increments the \textit{char\_device} struct's reference-count variable by one.
+	
+	\lstinputlisting[caption= The \textit{char\_device} struct, style=customc]{char-device-linux.c }
+	
+	The  \textit{hash} member points to a link in the chain of devices with the same hash address.
+	\textit{count} is the number of references to the encompassing struct.
+	As mentioned above, each \textit{cdget()} call increases \textit{count} by one and each\textit{ cdput()} call decreases \textit{count} by one. In the case where \textit{count} becomes zero, the struct is removed. 
+	The field \textit{dev} stores the device number. 
+	In most cases the fields \textit{openers} and \textit{sem} are unused.
+	Access to this struct is protected by the \textit{cdev\_lock spinlock} \cite{implLinuxChar}.	
+	
+	Block devices behave similar to files. Block devices allow a buffered array of cached data to be read or written \cite{deviceLinuxMolly}.
+	Blocks are often a number of sectors that equate to no larger than 4KB, called a page. 
+	A page's size can vary architecture to architecture. 
+	A sector is a chunk of memory 512 bytes in size. 
+	The Linux kernel expects device's sectors to be 512-bytes.
+	If a device uses a different size, the kernel adapts and avoids generating I/O requests that the hardware cannot handle \cite{implLinuxBlock}.
+	Block devices follow a set up similar to character devices.
+	Character devices use the \textit{file\_operations} struct to describe possible operations and block devices use the \textit{block\_device\_operations} struct.
+	Within the \textit{block\_device\_operations} struct there is a \textit{gendisk} struct.
+	\textit{gendisk} is the kernel's representation of an individual disk device.
+	\textit{gendisk} cannont be initialized by the driver itself.
+	The driver must make a call to \textit{alloc\_disk(int minors)} asking the kernel to please make a block device with \textit{minors} minor numbers.
+	This call initializes the block device, but it doesn't make the device available to the system yet.
+	For that, a call to \textit{add\_disk(struct gendisk *gd)} must take place with the argument being the 	\textit{gendisk} struct returned by \textit{alloc\_disk(int minors)}.
+	
+	There are several fields in \textit{gendisk} that need to be initialized in order to set up a block device:
+	\begin{itemize}
+		\item \textit{int major; int first\_minor; int minors;}
+			 \begin{itemize}
+			 	\item These variables hold the device number(s) used by the disk. According to the book Linux Device Drivers, "At a minimum, a drive must use at least one minor number. If your drive is to be partitionable, however (and most should be), you want to allocate one minor number for each possible partition as well. A common value for minors is 16, which allows for the full disk device and 15 partitions. " \cite{implLinuxBlock}.
+			\end{itemize}
+	
+		\item \textit{char disk\_name[32]}
+			 \begin{itemize}
+				\item This is the block device's name. It will show up in /proc/partitions and sysfs.
+			\end{itemize}
+		
+		\item \textit{struct block\_device\_operations *fops;}
+		\begin{itemize}
+			\item A struct full of block operations. Similar to that of \textit{file\_operations} for a character device.
+		\end{itemize}
+
+		\item \textit{struct request\_queue *queue;}
+		\begin{itemize}
+			\item A struct that holds tasks. This is used by the kernel to manage I/O requests for this device
+		\end{itemize}
+
+		\item \textit{int flags;}
+		\begin{itemize}
+			\item A set of flags describing the state of the device. For instance, if it has removable media.
+		\end{itemize}
+	
+		\item \textit{sector\_t capacity;}
+		\begin{itemize}
+			\item The size of this device in the form of 512 byte sectors.
+		\end{itemize}
+	
+		\item \textit{void *private\_data;}
+		\begin{itemize}
+			\item Block devices can use this pointer to keep track of where their own data is located.
+		\end{itemize}
+	\end{itemize}
+	\subsection{Development Resources}
+		Linux has a gigantic collection of resources for use in development, including a cypto API.
+		Linux has a large list of built-in data structures and algorithms for use.
+		Luis de Bethencourt gives a list of them in his blog, along with links to their source in GitHub.
+		Below is the exact list, minus the links to the GitHub sources. \cite{linuxRes}.
+		\begin{itemize}
+			\item \textit{Linked lists, doubly linked lists, lock-free linked lists.}
+			\item \textit{B+ Trees} with comments telling you what you can't find in the textbooks.
+			\item \textit{Priority sorted lists} used for \textit{mutexes, drivers}, etc.
+			\item \textit{Red-Black trees} are used are used for scheduling, virtual memory management, to track file descriptors and directory entries, etc.
+			\item \textit{Interval trees.}
+			\item \textit{Radix trees}, are used for memory management, NFS related lookups and networking related functionality.
+			\item \textit{Priority heap}, which is literally, a textbook implementation, used in the control group system.
+			\item \textit{Hash functions}, with a reference to Knuth and to a paper.
+			\item \textit{Hash tables} used to implement inodes, file system integrity checks, etc.
+			\item \textit{Bit arrays}, which are used for dealing with flags, interrupts, etc. and are featured in Knuth Vol. 4.
+			\item\textit{ Semaphores} and \textit{spin locks}.
+			\item \textit{Binary search} is used for\textit{ interrupt handling}, \textit{register cache lookup}, etc.
+			\item \textit{Binary search with B-trees}.
+			\item \textit{Depth first search} and variant used in \textit{directory configuration}.
+			\item \textit{Breadth first search} is used to check correctness of locking at runtime.
+			\item\textit{ Merge sort} on linked lists is used for garbage collection, file system management, etc.
+			\item \textit{Bubble sort} is amazingly implemented too, in a driver library.
+			\item \textit{Knuth-Morris-Pratt string matching}.
+			\item \textit{Boyer-Moore pattern matching} with references and recommendations for when to prefer the alternative.
+		\end{itemize}
+	
+		\subsection{I/O Scheduling}
+			Linux comes with three I/O schedulers: Deadline, Completely Fair Queuing (CFQ), and NOOP. The default is CFQ.
+			
+			The Deadline scheduler attempts to limit the maximum latency. 
+			Each incoming I/O request is assigned its own deadline which the request should be completed before.
+			Two queues are maintained per device, one is sorted by the sector the request wishes to travel to and the other by deadline. 
+			The I/O requests are done in sector order to minimize head motion and provide the best throughput. However, if a deadline is approaching then the head will jump to whichever sector meets that request's needs \cite{linuxSChed}.
+			
+			The CFQ first divides processes into the three classes labeled Real Time, Best Effort, and Idle. 
+			Real Time processes are served first, Best Effort processes second, and Idle processes third. 
+			Within each class, the kernel attempts to give each process the same amount of CPU time. 
+			The kernel uses recent I/O patterns to anticipate whether an application will issue more requests in the near future.
+			If more I/O is anticipated, the kernel will wait for the predicted request to arrive, even though other processes have pending I/O \cite{linuxSChed}.
+
+			The NOOP scheduler really isn't a scheduler at all. 
+			NOOP does nothing to prioritize requests over others.
+			It simply handles the requests in the order they are received.
+	
+	\section{FreeBSD Implementation}
+	
+		\subsection{Devices}
+			FreeBSD supports character devices and network devices.
+			FreeBSD used to support block devices as well, but in modernizing the I/O architecture the authors decided to no longer support them as "no real application utilized them" \cite{freeBSDSmall}.
+			A character device in FreeBSD is very similar to a character device in Linux.
+			Almost all peripherals on the system, except network interfaces, have a character-device interface. 
+			A character device, also known as a raw device, is a device that usually maps the hardware interface into a byte stream.
+			The disk driver handles requested I/O by maintaining and ordering an active queue of pending requests. 
+			Each entry in the queue must specify whether it is requesting to read or write, the main-memory address of the request, the device address for the request (usually a disk sector number), and the transfer size (in bytes).
+			Most raw devices differ from filesystems only in the way that they do I/O. 
+			The character interface does not copy the user data into a kernel buffer before putting them on an I/O queue. Instead, it transfers the requested data directly to or from the address space of the process.
+			Whereas a filesystem reads and writes data to and from a kernel buffer first, then transfers the data to the requested destination from the kernel buffers. 
+			Character devices avoiding the use of kernel buffers eliminates the memory-to-memory copy that must be done by filesystems.
+			However, this comes at the price of having to deny applications the benefits of data caching \cite{freeBSDDev}.
+		
+		\subsection{Development Resources}
+			FreeBSD offers development resources very similar to those described in Linux above.
+			For instance, FreeBSD offers a crypto API much like Linux's crypto support, as well as a queue, linked list, and red-black tree.
+
+		\subsection{I/O Scheduling}
+			The default FreeBSD scheduler is the ULE scheduler.
+			The ULE scheduler is broken into two parts: a low-level section which runs frequently and a more complex high-level section which runs at most a few times per second.
+			The low-level scheduler runs each time a thread blocks.
+			To do scheduling efficiently it maintains a set of run queues per CPU that are organized from high priority to low.
+			When a thread blocks, the low-level's only job is to find out which thread is the highest priority and replace it with the blocked thread. 
+			The high-level scheduler is in charge of prioritizing each thread and figuring out which CPU's run queue a thread should be placed.
+			In selecting a new thread to run, the low-level scheduler scans the run queues of the CPU needing a new thread from highest to lowest priority and chooses the first thread on the first nonempty queue.
+			If there is more than one thread in the queue, the system runs them in a round robin fashion. 
+			That is, it runs them in a FIFO order, with equal amounts of CPU time. 
+			If a thread blocks, it is not put back onto a run queue. 
+			Instead, it is placed on a \textit{sleepqueue}. 
+			If a thread uses up its time-slice allowed, it's placed at the end of the queue from which it came, and the thread at the front of the queue is selected to run \cite{freeBSDScheduler}.
+
+	
+\section{Windows Implementation}
+
+	\subsection{Devices}
+		The Windows OS doesn't use bock and character devices directly.
+		Instead, modern Windows device drivers abide by the Windows Driver Model (WDM), which is a more plug-and-play architecture.
+		This gives the devices flexibility to be loaded and unloaded as necessary. 
+		Applications that use the device send their requests to the I/O Manager, which is handled by the kernel.
+		The I/O Manager transforms the request into an I/O Request Packet (IRP) that is then used to identify the request and handle data transfer interactions between driver layers.
+		
+		The WDM provides three different devices and  each device corresponds to a different layer: Filter, Function, and Bus.
+		The Filter layer provides additional IRP processing capabilities.
+		The Function layer is the main driver. This layer is responsible for implementing interfaces to other devices.
+		The Bus layer services adapters and bus controllers that are connected to devices.
+		An IRP passes through these three layers as it travels from the I/O manager down to the Hardware Abstraction Layer (HAL).
+		However, each layer is capable of handling an IRP and then sending it back to the I/O Manager \cite{windowsDevs}.
+		
+		Drivers are represented by a \textit{DriverObject}.
+		\textit{DriverObject}s are initialized during the execution of the \textit{DriverEntry} function. 
+		This function is also responsible for registering callbacks that will be called when the newly initialized device is added, removed, or handling incoming IRPs. 
+		Windows creates a device object when a device is connected, and this device object handles all application requests on behalf of the device driver.
+		A Windows device driver is alerted when a newly connected device is in its \textit{AddDevice} callback.
+		When this occurs, the \textit{DriverObject} creates a device object which is used to identify the connected device instance. 
+		Depending on the driver type, the device object created can be a Physical Device Object (PDO), Function Device Object (FDO), or a Filter Device Object (FIDO). 
+		Device objects are also capable of being stacked, with a PDO in the bottom \cite{windowsDevs}.
+	
+		\subsection{Development Resources}
+			Windows has a doubly linked list implementation, an API into the I/O Manager, an API into the Memory Manager, and an API into the Cache Manager \cite{windowsResources}.
+			
+	\subsection{I/O Scheduling}
+		Windows requests are ranked in a priority based system. 
+		There are 33 priority levels - zero is the lowest and 32 is the highest. 
+		Windows treats all threads with the same priority as equal.
+		All high priority threads are assigned a time-slice in a round-robin fashion. 
+		In cases where no high priority threads are able to run (they're waiting), then time-slices are assigned to the next highest priority level of threads in the same round-robin fashion.
+		When a higher priority thread stops waiting and is able to run, the system abruptly halts a lower priority thread, and assigns a full time-slice to the awakened higher priority thread.
+		Windows maintains a queue of readily executable threads for each priority level \cite{windowsSched}.
+
+
+\section{Compare}
+	The three operating system's devices are all event driven. 
+	They execute either when the user wants something, or the device has something to tell the OS.
+	
+	A main difference in how Linux and FreeBSD implements device drivers compared to Windows is that Linux and FreeBSD don't have a standard driver model like Window's WDM. A Window's device driver is usually implemented as a module that can be loaded and unloaded into the kernel as needed. Linux supports plug-and-play, but this is not a requirement \cite{windowsDevs}. I think Windows chose this implementation to keep drivers more organized; all drivers follow a specified format. I think the Linux approach is a "here are the given tools, place them together and make things." type of approach. I think Linux implemented it this way for flexibility reasons. 
+	
+	Both Linux and Windows provide three means of transferring data from user-level applications to device drivers  \cite{windowsDevs}:
+	\begin{itemize}
+		\item \textbf{Buffered Input-Output} uses data buffers owned by the kernel. For write operations the kernel copies data from the user-space buffer into a kernel-allocated buffer, then passes it to the device driver. The same goes for reads but in the opposite direction. The kernel copys the data from the kernel buffer into the buffer provided by the requesting application.
+		\item \textbf{Direct Input-Output} instructs the kernel to set up a user-allocated buffer in physical memory. Now, instead of transferring data between buffers, a write or read accesses that buffer directly.
+		\item \textbf{Memory Mapping} can also be arranged by the kernel so that the kernel and user-space applications can access the same pages of memory using distinct addresses.
+	\end{itemize}
+	
+	Linux supports block-devices while FreeBSD doesn't. 
+	FreeBSD has a valid reason why they don't, and so they took it out of their modern versions \cite{freeBSDSmall}.
+	I believe Linux still supports block-devices for flexibility reasons.
+	A user can choose to use them if they'd like, or choose not to, it's up to them.
+	
+	The FreeBSD ULE scheduler and the Windows scheduler are quite similar.
+	They both hand out time-slices in a round robin fashion, they both categorize tasks in terms of priority levels, and they both utilize run queues.
+	I think Windows and FreeBSD implemented their schedulers in this way, because it is a very sequential human-like approach to scheduling. That is, rank the tasks in order of importance, run the most important tasks first, if one is sleeping and wakes up then replace a running less important task with the more important one.
+	
+	Linux's CFQ focuses more on the efficiency of the machine. 
+	The CFQ places tasks into one of three categories, and runs each task for the same amount of time.
+	But, if it thinks that a new request will come in and want to read or write from a nearby sector, then the CFQ waits for it.
+	It waits because it would be inefficient for the disk-head to move to the next request just to come back to where it once was a few clock ticks ago.
+	
+	FreeBSD and Linux have a large collection of development resources. 
+	Windows on the other hand is quite slim, or they choose not to make them public on the Internet.
+	I think that FreeBSD and Linux have a diverse set of data structures, algorithms, and APIs because it is open source. This gives the public the ability to add their implementations to the code base for other developers.
+	
+\bibliographystyle{IEEEtran}
+\bibliography{references.bib}
+
+\end{document}
